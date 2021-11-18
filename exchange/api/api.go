@@ -305,7 +305,7 @@ func (a *Api) generationAddress(ct *Context) (interface{}, *Error) {
 	if err != nil {
 		return nil, nil
 	}
-	address, err := address.EcPublicToAddress(ecPublic, "testnet")
+	address, err := address.EcPublicToAddress(ecPublic, "mainnet")
 	if err != nil {
 		return nil, nil
 	}
