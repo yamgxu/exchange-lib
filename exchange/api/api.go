@@ -5,7 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/Qitmeer/exchange-lib/address"
 	"github.com/Qitmeer/exchange-lib/exchange/db"
+	"github.com/Qitmeer/exchange-lib/sign"
 	"github.com/Qitmeer/exchange-lib/sync"
 	"github.com/Qitmeer/qitmeer/core/types"
 	"github.com/bCoder778/log"
@@ -44,6 +46,7 @@ func (a *Api) addApi() {
 	a.rest.AuthRouteSet("api/v1/address").Post(a.addAddress)
 	a.rest.AuthRouteSet("api/v1/address").Get(a.getAddress)
 	a.rest.AuthRouteSet("api/v1/address/utxo").Get(a.getAddressUTXO)
+	a.rest.AuthRouteSet("api/v1/generationAddress").Get(a.generationAddress)
 
 	a.rest.AuthRouteSet("api/v2/transaction").Post(a.sendTransactionV2)
 }
@@ -54,7 +57,7 @@ func (a *Api) getUTXO(ct *Context) (interface{}, *Error) {
 		return nil, &Error{ERROR_UNKNOWN, "address is required"}
 	}
 	coin, ok := ct.Query["coin"]
-	if coin == ""{
+	if coin == "" {
 		coin = "MEER"
 	}
 
@@ -76,7 +79,7 @@ func (a *Api) getSpentUTXO(ct *Context) (interface{}, *Error) {
 		return nil, &Error{ERROR_UNKNOWN, "address is required"}
 	}
 	coin, ok := ct.Query["coin"]
-	if coin == ""{
+	if coin == "" {
 		coin = "MEER"
 	}
 	spent, amount, _ := a.storage.GetAddressSpentUTXOs(addr, coin)
@@ -93,7 +96,7 @@ func (a *Api) getLockUTXO(ct *Context) (interface{}, *Error) {
 		return nil, &Error{ERROR_UNKNOWN, "address is required"}
 	}
 	coin, ok := ct.Query["coin"]
-	if coin == ""{
+	if coin == "" {
 		coin = "MEER"
 	}
 	chainMainHeight, err := a.storage.GetHeight()
@@ -289,3 +292,79 @@ func (a *Api) getAddressUTXO(ct *Context) (interface{}, *Error) {
 	}
 	return utxo, nil
 }
+
+func (a *Api) generationAddress(ct *Context) (interface{}, *Error) {
+
+	rest := make(map[string]string)
+
+	ecPrivate, err := address.NewEcPrivateKey()
+	if err != nil {
+		return nil, nil
+	}
+	ecPublic, err := address.EcPrivateToPublic(ecPrivate)
+	if err != nil {
+		return nil, nil
+	}
+	address, err := address.EcPublicToAddress(ecPublic, "testnet")
+	if err != nil {
+		return nil, nil
+	}
+	rest["address"] = address
+	rest["ecPrivate"] = ecPrivate
+	rest["ecPublic"] = ecPublic
+
+	return rest, nil
+}
+
+func (a *Api) signTransaction(ct *Context) (interface{}, *Error) {
+	input, _ := ct.Form["input"]
+	inputValue, _ := ct.Form["inputValue"]
+	pkHex, _ := ct.Form["pkHex"]
+	output, _ := ct.Form["output"]
+	outputValue, _ := ct.Form["outputValue"]
+	key, _ := ct.Form["key"]
+
+	inputs := make(map[string]uint32, 0)
+	outputs := make(map[string]uint64, 0)
+	parseInt, _ := strconv.ParseInt(inputValue, 10, 32)
+
+	inputs[input] = uint32(parseInt)
+	pkHexList := []string{pkHex}
+
+	parseInt1, _ := strconv.ParseInt(outputValue, 10, 32)
+	outputs[output] = uint64(parseInt1)
+
+	txCode, err := sign.TxEncode(1, 0, nil, inputs, outputs, "MEER")
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		rawTx, _ := sign.TxSign(txCode, []string{key}, "mainnet", pkHexList)
+		return rawTx, nil
+	}
+	return nil, nil
+}
+
+/*
+func (a *Api) signTransaction(ct *Context) (interface{}, *Error) {
+	input, ok := ct.Form["inputs"]
+	pkHex, ok := ct.Form["pkHex"]
+	raw, ok := ct.Form["inputs"]
+
+	rest:= make(map[string]string)
+	inputs := make(map[string]uint32, 0)
+	outputs := make(map[string]uint64, 0)
+	inputs["fa069bd82eda6b98e9ea40a575de1dc4c053d94a9901a956e13d30f6ab81413e"] = 0
+	pkHexList := []string{"76a9142a1dfad6bb26da7c0138b85440aa44a76cffade388ac"}
+	outputs["TmUQjNKPA3dLBB6ZfcKd4YSDThQ9Cqzmk5S"] = 100000000
+	outputs["TmWRM7fk8SzBWvuUQv2cJ4T7nWPnNmzrbxi"] = 200000000
+	txCode, err := sign.TxEncode(1, 0, nil, inputs, outputs, "MEER")
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		key := "1234567812345678123456781234567812345678123456781234567812345678"
+		rawTx, ok := sign.TxSign(txCode, []string{key}, "testnet",  pkHexList)
+
+	}
+	return	rest, nil
+}
+*/
